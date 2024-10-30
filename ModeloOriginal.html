@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulación Máquina Borracintas de Turing</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #df9292;
+        }
+        h1 {
+            color: #333;
+        }
+        #input-section, #control-buttons {
+            margin-top: 15px;
+        }
+        #tape-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+        #tape {
+            font-size: 1.5em;
+            margin: 10px 0;
+            padding: 10px;
+            border: 2px solid #333;
+            display: flex;
+            gap: 5px;
+            background-color: #fff;
+            overflow-x: auto;
+        }
+        .cell {
+            width: 30px;
+            height: 30px;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            color: #333;
+        }
+        .highlight {
+            background-color: rgba(50, 176, 198, 0.861);
+        }
+        #pointer {
+            font-size: 1.5em;
+            color: #333;
+            position: relative;
+            top: -10px;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        /* Ruleta de estados */
+        #state-box {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .state {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background-color: #fff;
+            border: 2px solid #333;
+            font-weight: bold;
+            color: #333;
+        }
+        .active-state {
+            background-color: yellow;
+        }
+        /* Posiciones específicas para la disposición circular */
+        #state-A { top: 0; left: 50%; transform: translate(-50%, -50%); }
+        #state-B { top: 25%; right: 5%; transform: translate(50%, -50%); }
+        #state-C { top: 75%; right: 5%; transform: translate(50%, -50%); }
+        #state-D { bottom: 0; left: 50%; transform: translate(-50%, 50%); }
+        #state-E { top: 75%; left: 5%; transform: translate(-50%, -50%); }
+        #state-F { top: 25%; left: 5%; transform: translate(-50%, -50%); }
+    </style>
+</head>
+<body>
+    <h1>Simulación Máquina Borracintas de Turing</h1>
+    <div id="input-section">
+        <label for="tapeInput">Introduce la cinta inicial (solo 0 y 1):</label>
+        <input type="text" id="tapeInput" placeholder="Ejemplo: 1010101" maxlength="20"><br><br>
+        <label for="headPosition">Posición inicial del cabezal (0 a longitud de cinta - 1):</label>
+        <input type="number" id="headPosition" placeholder="Ejemplo: 3" min="0">
+        <button onclick="initializeTape()">Ingresar Cinta</button>
+    </div>
+
+    <!-- Contenedor de la Cinta y Flecha -->
+    <div id="tape-container">
+        <div id="tape"></div>
+        <div id="pointer">⬇</div>
+    </div>
+
+    <!-- Ruleta de Estados -->
+    <div id="state-box">
+        <div class="state" id="state-A">A</div>
+        <div class="state" id="state-B">B</div>
+        <div class="state" id="state-C">C</div>
+        <div class="state" id="state-D">D</div>
+        <div class="state" id="state-E">E</div>
+        <div class="state" id="state-F">F</div>
+    </div>
+    <div id="current-state"> <span id="stateDisplay">A</span></div>
+
+    <div id="control-buttons">
+        <button onclick="nextStep()">Siguiente Paso</button>
+        <button onclick="previousStep()">Retroceder Paso</button>
+        <button onclick="resetTape()">Reiniciar Cinta</button>
+    </div>
+
+    <script>
+        let tapeArray = [];
+        let currentPosition = 0;
+        let currentState = 'A';
+        let history = [];
+        let initialTapeArray = [];
+        let initialPosition = 0;
+
+        // Función para inicializar la cinta
+        function initializeTape() {
+            const input = document.getElementById('tapeInput').value;
+            const positionInput = document.getElementById('headPosition').value;
+            const headPosition = parseInt(positionInput, 10);
+
+            if (/^[01]+$/.test(input) && !isNaN(headPosition) && headPosition >= 0 && headPosition < input.length) {
+                tapeArray = input.split('');
+                initialTapeArray = [...tapeArray];
+                currentPosition = headPosition;
+                initialPosition = headPosition;
+                currentState = 'A';
+                history = [];
+                updateStateDisplay();
+                displayTape();
+            } else {
+                alert("Por favor, ingrese una cinta válida de 0 y 1, y una posición válida para el cabezal.");
+            }
+        }
+
+        // Función para mostrar la cinta actual
+        function displayTape() {
+            const tapeDiv = document.getElementById('tape');
+            tapeDiv.innerHTML = '';
+            tapeArray.forEach((symbol, index) => {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.textContent = symbol;
+                if (index === currentPosition) {
+                    cell.classList.add('highlight');
+                }
+                tapeDiv.appendChild(cell);
+            });
+            updatePointer();
+        }
+
+        // Función para actualizar la posición de la flecha (puntero)
+        function updatePointer() {
+            const pointer = document.getElementById('pointer');
+            const cellWidth = 35; // Ajusta esto según el ancho de cada celda
+            pointer.style.transform = `translateX(${currentPosition * cellWidth}px)`;
+        }
+
+        // Función para actualizar el estado resaltado en la ruleta de estados
+        function updateStateDisplay() {
+            document.getElementById('stateDisplay').textContent = currentState;
+            const states = ["A", "B", "C", "D", "E", "F"];
+            states.forEach(state => {
+                const stateElement = document.getElementById(`state-${state}`);
+                if (state === currentState) {
+                    stateElement.classList.add("active-state");
+                } else {
+                    stateElement.classList.remove("active-state");
+                }
+            });
+        }
+
+        // Función para avanzar un paso según el estado actual
+        function nextStep() {
+            // Extiende la cinta hacia la derecha si el cabezal se sale del último índice
+            if (currentPosition >= tapeArray.length) {
+                tapeArray.push('0');
+            }
+
+            // Bloquea el movimiento si el cabezal intenta salir de la cinta por la izquierda
+            if (currentPosition < 0) {
+                alert("La cinta ha alcanzado el límite izquierdo.");
+                currentPosition = 0;
+                return;
+            }
+
+            // Guarda el estado actual en el historial antes de realizar cambios
+            history.push({
+                tape: [...tapeArray],
+                position: currentPosition,
+                state: currentState
+            });
+
+            const symbol = tapeArray[currentPosition];
+
+            switch (currentState) {
+                case 'A':
+                    tapeArray[currentPosition] = '1';
+                    currentPosition++;
+                    currentState = 'B';
+                    break;
+                case 'B':
+                    tapeArray[currentPosition] = '1';
+                    currentPosition--;
+                    currentState = 'C';
+                    break;
+                case 'C':
+                    if (symbol === '1') {
+                        tapeArray[currentPosition] = '0';
+                        currentPosition--;
+                        currentState = 'D';
+                    } else {
+                        currentPosition--;
+                    }
+                    break;
+                case 'D':
+                    tapeArray[currentPosition] = '1';
+                    currentPosition++;
+                    currentState = 'E';
+                    break;
+                case 'E':
+                    if (symbol === '1') {
+                        tapeArray[currentPosition] = '0';
+                        currentPosition++;
+                        currentState = 'F';
+                    } else {
+                        currentPosition++;
+                    }
+                    break;
+                case 'F':
+                    tapeArray[currentPosition] = '1';
+                    currentPosition--;
+                    currentState = 'C';
+                    break;
+            }
+
+            updateStateDisplay();
+            displayTape();
+        }
+
+        // Función para retroceder un paso
+        function previousStep() {
+            if (history.length > 0) {
+                const lastState = history.pop();
+                tapeArray = lastState.tape;
+                currentPosition = lastState.position;
+                currentState = lastState.state;
+                updateStateDisplay();
+                displayTape();
+            } else {
+                alert("No hay más pasos para retroceder.");
+            }
+        }
+
+        // Función para reiniciar la cinta al estado inicial
+        function resetTape() {
+            tapeArray = [...initialTapeArray];
+            currentPosition = initialPosition;
+            currentState = 'A';
+            history = [];
+            updateStateDisplay();
+            displayTape();
+        }
+    </script>
+</body>
+</html>
